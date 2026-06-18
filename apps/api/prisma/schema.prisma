@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SkillLevel {
+  Junior
+  Middle
+  Senior
+  Expert
+}
+
+enum ResourceType {
+  article
+  video
+  course
+  book
+  docs
+  practice
+}
+
+enum ProgressStatus {
+  done
+  doing
+  planned
+}
+
+enum DemandTier {
+  S
+  A
+  B
+  C
+  D
+}
+
+enum ChangeAction {
+  add
+  edit
+  remove
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String?
+  role         Role       @default(USER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  progress Progress[]
+
+  @@map("users")
+}
+
+model Profession {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  summary      String
+  salaryMedian Int?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  professionSkills ProfessionSkill[]
+
+  searchVector Unsupported("tsvector")?
+
+  @@index([searchVector], type: Gin)
+  @@map("professions")
+}
+
+model Skill {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  title       String
+  description String
+  level       SkillLevel
+  category    String
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  professionSkills ProfessionSkill[]
+  skillResources   SkillResource[]
+  skillTags        SkillTag[]
+  progress         Progress[]
+
+  prerequisites SkillPrerequisite[] @relation("skill_prerequisites")
+  dependants    SkillPrerequisite[] @relation("skill_dependants")
+
+  searchVector Unsupported("tsvector")?
+
+  @@index([searchVector], type: Gin)
+  @@map("skills")
+}
+
+model Resource {
+  id          String       @id @default(cuid())
+  title       String
+  url         String
+  type        ResourceType
+  language    String       @default("ru")
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  skillResources SkillResource[]
+
+  @@map("resources")
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String @default("#6366f1")
+
+  skillTags SkillTag[]
+
+  @@map("tags")
+}
+
+model Progress {
+  id        String         @id @default(cuid())
+  userId    String
+  skillId   String
+  status    ProgressStatus
+  updatedAt DateTime       @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+  @@map("progress")
+}
+
+model ProfessionSkill {
+  professionId String
+  skillId      String
+  importance   Int        @default(1)
+  demandTier   DemandTier @default(B)
+
+  profession Profession @relation(fields: [professionId], references: [id], onDelete: Cascade)
+  skill      Skill      @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([professionId, skillId])
+  @@map("profession_skills")
+}
+
+model SkillResource {
+  skillId    String
+  resourceId String
+  priority   Int    @default(0)
+
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([skillId, resourceId])
+  @@map("skill_resources")
+}
+
+model SkillTag {
+  skillId String
+  tagId   String
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([skillId, tagId])
+  @@map("skill_tags")
+}
+
+model SkillPrerequisite {
+  skillId        String
+  prerequisiteId String
+
+  skill        Skill @relation("skill_prerequisites", fields: [skillId], references: [id], onDelete: Cascade)
+  prerequisite Skill @relation("skill_dependants", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@id([skillId, prerequisiteId])
+  @@map("skill_prerequisites")
+}
+
+model ContentChange {
+  id          String       @id @default(cuid())
+  entityType  String
+  entityId    String
+  entityTitle String
+  action      ChangeAction
+  diff        Json?
+  adminId     String?
+  adminEmail  String?
+  createdAt   DateTime     @default(now())
+
+  @@map("content_changes")
+}
